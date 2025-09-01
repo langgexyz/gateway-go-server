@@ -4,6 +4,25 @@
 
 这是一个基于Go语言的Gateway服务器项目，提供WebSocket连接管理、消息发布/订阅功能和HTTP代理服务。
 
+## ⚠️ 配套客户端
+
+**此服务器需要配合 TypeScript SDK 客户端使用！**
+
+完整的 Gateway 解决方案包括：
+1. **Gateway Go Server** (本项目): WebSocket 服务器，处理连接和消息路由
+2. **Gateway TypeScript SDK**: 客户端 SDK，参考 [gateway-ts-sdk](https://github.com/langgexyz/gateway-ts-sdk)
+
+```bash
+# 典型使用流程
+# 1. 启动服务器
+make debug
+
+# 2. 使用客户端 SDK (需要单独克隆 gateway-ts-sdk 仓库)
+cd path/to/gateway-ts-sdk
+npm install
+npm run examples:node
+```
+
 ## 项目结构
 
 ```
@@ -26,12 +45,6 @@ gateway-go-server/
 │   │   └── suite.go            # 代理套件
 │   └── utils/
 │       └── compression.go      # 工具函数
-├── gateway-ts-sdk/              # TypeScript SDK
-│   ├── dist/                   # 编译产物
-│   ├── examples/               # 使用示例
-│   ├── src/                    # SDK源码
-│   ├── package.json            # NPM包配置
-│   └── README.md               # SDK文档
 ├── go.mod                      # Go模块定义
 ├── go.sum                      # Go依赖锁定
 ├── makefile                    # 构建脚本
@@ -49,44 +62,61 @@ gateway-go-server/
 
 ## 快速开始
 
-### 1. 编译和启动服务器
+### 前置条件
+
+由于这是一个独立的服务器项目，你还需要克隆配套的客户端 SDK：
+
+```bash
+# 克隆服务器仓库
+git clone https://github.com/langgexyz/gateway-go-server.git
+
+# 克隆客户端 SDK 仓库  
+git clone https://github.com/langgexyz/gateway-ts-sdk.git
+```
+
+### 步骤 1: 启动 Gateway 服务器
 
 ```bash
 # 编译服务端
 make build
 
-# 启动服务器
+# 启动服务器（生产模式）
 ./bin/gateway-go-server
 
-# 或者使用配置文件启动
-./bin/gateway-go-server -config=bin/config.debug.json
-
-# 调试模式启动
+# 或者调试模式启动（推荐开发时使用）
 make debug
+
+# 使用自定义配置文件启动
+./bin/gateway-go-server -config=bin/config.debug.json
 ```
 
-### 2. 使用 TypeScript SDK
+服务器启动后会监听端口 `18443`（默认），等待客户端连接。
+
+### 步骤 2: 使用客户端 SDK
+
+服务器启动后，需要使用 TypeScript SDK 进行连接和测试：
 
 ```bash
-# 进入SDK目录
-cd gateway-ts-sdk
+# 切换到 SDK 目录 (需要单独克隆 gateway-ts-sdk 仓库)
+cd path/to/gateway-ts-sdk
 
 # 安装依赖
 npm install
 
-# 构建SDK
-npm run build
+# 运行基础测试示例
+npm run examples:node
 
-# 运行示例
-node examples/node.cjs
+# 运行完整功能测试（Hook + Proxy）
+npm run examples:hook-proxy
 ```
 
-### 3. 测试连接
+### 步骤 3: 验证连接
 
-1. 启动Go服务器（默认端口18443）
-2. 使用SDK连接到 `ws://localhost:18443`
-3. 测试订阅/发布功能
-4. 测试HTTP代理功能
+确认以下功能正常工作：
+1. ✅ WebSocket 连接到 `ws://localhost:18443`
+2. ✅ 订阅/发布消息功能
+3. ✅ Ping 连接测试
+4. ✅ HTTP 代理功能
 
 ## API文档
 
@@ -199,32 +229,6 @@ node examples/node.cjs
 - **跨平台**: 支持Linux、Windows、macOS等多平台部署
 - **HTTP代理**: 高性能的HTTP请求代理转发
 
-## 架构设计
-
-### 服务端架构
-
-```
-┌─────────────────────────────────────┐
-│            API Layer                │  HTTP/WebSocket接口层
-│  ├─ Subscribe API                   │  - 客户端订阅管理
-│  ├─ Publish API                     │  - 消息发布处理
-│  └─ Ping API                        │  - 连接测试
-└─────────────────────────────────────┘
-                 ⬇️
-┌─────────────────────────────────────┐
-│          Business Layer             │  业务逻辑层
-│  ├─ Connection Manager              │  - WebSocket连接管理
-│  ├─ Message Router                  │  - 消息路由和转发
-│  └─ Statistics Collector            │  - 统计信息收集
-└─────────────────────────────────────┘
-                 ⬇️
-┌─────────────────────────────────────┐
-│           Proxy Layer               │  代理转发层
-│  ├─ WebSocket Proxy                 │  - WebSocket代理
-│  ├─ Load Balancer                   │  - 负载均衡
-│  └─ Connection Pool                 │  - 连接池管理
-└─────────────────────────────────────┘
-```
 
 ## 开发指南
 
@@ -358,24 +362,6 @@ go tool pprof http://localhost:8080/debug/pprof/profile
 
 MIT License
 
-## 更新日志
-
-### v2.0.0 (当前版本)
-- 简化项目命名：stream-gateway → gateway
-- 添加完整的TypeScript SDK
-- 优化服务端性能和稳定性
-- 完善API文档和测试覆盖
-- 支持HTTP代理功能
-
-### v1.0.0
-- 基础WebSocket服务器实现
-- 基本的订阅/发布功能
-- HTTP代理功能
-
 ## 联系方式
 
 如有问题或建议，请提交Issue或联系开发团队。
-
----
-
-**注意**: 这是一个测试和开发工具，不建议直接用于生产环境。生产环境使用前请进行充分的安全评估和性能测试。
