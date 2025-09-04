@@ -45,11 +45,9 @@ func (s *Suite) APIPublish(ctx context.Context, request *PublishRequest) *Publis
 	}
 
 	if len(pushTokens) == 0 {
-		// 没有订阅者是正常现象，不返回错误
+		logger.Debug(fmt.Sprintf("cmd:%s clients: %d", request.Cmd, len(pushTokens)))
 		return &PublishResponse{}
 	}
-
-	logger.Debug(fmt.Sprintf("Found %d clients to publish to cmd '%s'", len(pushTokens), request.Cmd))
 
 	// 获取请求header用于追踪
 	reqId := s.Request.Header.Get("X-Req-Id")
@@ -63,31 +61,35 @@ func (s *Suite) APIPublish(ctx context.Context, request *PublishRequest) *Publis
 		},
 	})
 	if err != nil {
+		logger.Error(fmt.Sprintf("failed to marshal data: %v", err))
 		return &PublishResponse{ErrMsg: fmt.Sprintf("failed to marshal data: %v", err)}
 	}
 	dataToSend := string(dataBytes)
 
+	logger.Debug(fmt.Sprintf("cmd:%s clients: %d data: %d", request.Cmd, len(pushTokens), len(dataBytes)))
+
 	// 异步推送数据到所有订阅的客户端
+	pushCtx := context.Background()
 	for _, pushToken := range pushTokens {
-		go func(token string) {
+		go func(pushToken string) {
 			// 直接使用核心推送，避免HTTP开销
-			clientConn, st := core.GetClientConn(ctx, token)
+			clientConn, st := core.GetClientConn(pushCtx, pushToken)
 			if st != core.Success {
 				// 连接获取失败，从该命令移除失效的客户端
 				if clientsInterface, ok := channelClientsMap.Load(request.Cmd); ok {
 					clients := clientsInterface.(*sync.Map)
-					clients.Delete(token)
+					clients.Delete(pushToken)
 				}
 				return
 			}
 
 			// 推送数据到客户端
-			st = core.PushDataToClient(ctx, clientConn, []byte(dataToSend))
+			st = core.PushDataToClient(pushCtx, clientConn, []byte(dataToSend))
 			if st != core.Success {
 				// 推送失败，从该命令移除失效的客户端
 				if clientsInterface, ok := channelClientsMap.Load(request.Cmd); ok {
 					clients := clientsInterface.(*sync.Map)
-					clients.Delete(token)
+					clients.Delete(pushToken)
 				}
 			}
 		}(pushToken)
