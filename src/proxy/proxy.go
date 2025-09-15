@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gateway-go-server-main/src/utils"
+	"io"
 	"net/http"
 
 	"github.com/xpwu/go-httpclient/httpc"
@@ -39,8 +40,7 @@ func (s *Suite) APIProxy(ctx context.Context, request *string) *string {
 
 	logger.Debug(fmt.Sprintf("pushUrl: %s", pushUrl))
 
-	var res []byte
-	var resHeader http.Header
+	var res *http.Response
 	var err error
 
 	// 根据 HTTP 方法决定是否发送 body
@@ -48,23 +48,30 @@ func (s *Suite) APIProxy(ctx context.Context, request *string) *string {
 		// GET/HEAD/DELETE 请求通常不发送 body
 		err = httpc.Send(ctx, url, httpc.WithHeader(s.Request.Header),
 			httpc.WithMethod(method),
-			httpc.WithBytesResponse(&res),
-			httpc.WithResponseHeader(&resHeader),
+			httpc.WithResponse(&res),
 		)
 	} else {
 		// POST/PUT/PATCH 等请求发送 body
 		err = httpc.Send(ctx, url, httpc.WithHeader(s.Request.Header),
 			httpc.WithMethod(method),
 			httpc.WithBytesBody([]byte(*request)),
-			httpc.WithBytesResponse(&res),
-			httpc.WithResponseHeader(&resHeader),
+			httpc.WithResponse(&res),
 		)
 	}
 	if err != nil {
 		s.Request.Terminate(fmt.Errorf("proxy error: %+v", err))
 	}
 
-	response, err := utils.DecompressResponse(res, resHeader, logger)
+	// 读取响应体
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Read response body error: %+v", err))
+		s.Request.Terminate(err)
+		return nil
+	}
+	res.Body.Close()
+
+	response, err := utils.DecompressResponse(bodyBytes, res.Header, logger)
 	if err != nil {
 		logger.Error(fmt.Sprintf("DecompressResponse error: %+v", err))
 		s.Request.Terminate(err)
